@@ -340,7 +340,7 @@ class GasMeterEngine:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
-        self._integrate(dt_util.utcnow())
+        self._catch_up(dt_util.utcnow())
         await self._store.async_save(self.data)
 
     async def async_remove(self) -> None:
@@ -348,7 +348,7 @@ class GasMeterEngine:
         await self._store.async_remove()
 
     async def _async_on_stop(self, _event: Event) -> None:
-        self._integrate(dt_util.utcnow())
+        self._catch_up(dt_util.utcnow())
         await self._store.async_save(self.data)
 
     # ------------------------------------------------------------- integration
@@ -366,6 +366,29 @@ class GasMeterEngine:
         self.data["last_update"] = now.isoformat()
         self._maybe_checkpoint(now)
 
+    def _catch_up(self, now: datetime) -> None:
+        """Apply sensor changes not yet seen by the listener, then integrate.
+
+        The state machine is the source of truth: a sensor whose current value
+        differs from the cached one changed at ``last_changed`` but its
+        state_changed listener has not run yet (on older Home Assistant
+        versions listeners are dispatched on a later loop iteration, so a
+        timer callback can run first). Integrate the old values up to each
+        change in chronological order, so nothing is attributed to the wrong
+        value regardless of callback ordering.
+        """
+        pending: list[tuple[datetime, str, float]] = []
+        for eid in self.sensors:
+            state = self.hass.states.get(eid)
+            value = _state_value(state)
+            if value != self._values.get(eid, 0.0):
+                changed = state.last_changed if state is not None else now
+                pending.append((min(changed, now), eid, value))
+        for changed, eid, value in sorted(pending):
+            self._integrate(changed)
+            self._values[eid] = value
+        self._integrate(now)
+
     def _maybe_checkpoint(self, now: datetime) -> None:
         cps = self.data["checkpoints"]
         last_ts = cps[-1][0] if cps else self.last_reading_dt.timestamp()
@@ -378,16 +401,13 @@ class GasMeterEngine:
             self.data["published_total"] = raw
 
     @callback
-    def _async_state_changed(self, event: Event[EventStateChangedData]) -> None:
-        now = dt_util.utcnow()
-        self._integrate(now)
-        eid = event.data["entity_id"]
-        self._values[eid] = _state_value(event.data["new_state"])
+    def _async_state_changed(self, _event: Event[EventStateChangedData]) -> None:
+        self._catch_up(dt_util.utcnow())
         self._refresh()
 
     @callback
     def _async_tick(self, now: datetime) -> None:
-        self._integrate(dt_util.utcnow())
+        self._catch_up(dt_util.utcnow())
         self._refresh()
 
     @callback
@@ -573,7 +593,7 @@ class GasMeterEngine:
                 },
             )
 
-        self._integrate(now)
+        self._catch_up(now)
         cps = [(last_dt.timestamp(), 0.0)]
         cps += [(float(t), float(v)) for t, v in self.data["checkpoints"]]
         cps.append((now.timestamp(), self.index_since))
@@ -638,7 +658,7 @@ class GasMeterEngine:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="cannot_delete_only"
             )
-        self._integrate(dt_util.utcnow())
+        self._catch_up(dt_util.utcnow())
         removed = self.readings.pop(idx)
         rem_index = removed.get("index")
         if idx == len(self.readings):

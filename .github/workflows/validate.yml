@@ -23,14 +23,34 @@ jobs:
           ignore: brands
 
   tests:
+    name: tests (HA ${{ matrix.ha }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Minimum supported version (hacs.json "homeassistant").
+          # pycares<5: aiodns of that release does not support pycares 5.
+          - ha: "2025.8.0"
+            python: "3.13"
+            install: >-
+              homeassistant==2025.8.0
+              pytest-homeassistant-custom-component==0.13.269
+              "pycares<5"
+          # Latest Home Assistant (pytest-homeassistant-custom-component
+          # tracks the HA release; recent ones require Python 3.14).
+          - ha: "latest"
+            python: "3.14"
+            install: pytest-homeassistant-custom-component
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python }}
       - name: Install
-        run: pip install pytest-homeassistant-custom-component ruff
+        run: pip install ${{ matrix.install }} ruff
+      - name: Versions
+        run: python -c "import homeassistant.const as c; print('Home Assistant', c.__version__)"
       - name: Ruff
         run: |
           ruff check .

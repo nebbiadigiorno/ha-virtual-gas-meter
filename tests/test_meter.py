@@ -439,3 +439,25 @@ async def test_reading_date_persists_across_restart(
     )
     state = hass.states.get(eid(hass, entry, "datetime", "reading_date"))
     assert state.state == "2025-10-28T07:30:00+00:00"
+
+
+async def test_tick_before_state_listener_uses_change_time(
+    hass: HomeAssistant, setup_entry, freezer: FrozenDateTimeFactory
+) -> None:
+    """A timer tick that runs before a pending state_changed listener.
+
+    Older Home Assistant versions dispatch state_changed listeners on a later
+    loop iteration, so the periodic tick can see a stale cached value. The
+    change must still be accounted from the moment the state changed.
+    """
+    engine = setup_entry.runtime_data
+    hass.states.async_set(S1, "100")  # 12:00 UTC
+    freezer.tick(timedelta(minutes=30))
+    hass.states.async_set(S2, "50")  # 12:30 UTC
+    # Simulate listeners that have not run yet (cache still holds old values).
+    engine._values = {S1: 0.0, S2: 0.0}
+    await _advance(hass, freezer, timedelta(minutes=30))  # tick at 13:00 UTC
+    # S1 100 % for 1 h + S2 50 % for 0.5 h
+    assert engine.index_since == pytest.approx(125.0, rel=1e-6)
+    await hass.async_block_till_done()
+    assert engine.index_since == pytest.approx(125.0, rel=1e-6)

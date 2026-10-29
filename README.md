@@ -88,7 +88,7 @@ reading:
 Copy `custom_components/virtual_gas_meter` into `<config>/custom_components/` and restart
 Home Assistant.
 
-Requirements: Home Assistant 2025.1 or newer, and the `recorder` integration (enabled by
+Requirements: Home Assistant 2025.8 or newer, and the `recorder` integration (enabled by
 default), whose statistics are used for backfilling.
 
 ## Configuration

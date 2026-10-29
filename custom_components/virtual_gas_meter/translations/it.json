@@ -1,0 +1,248 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Contatore Gas Virtuale",
+        "description": "Stima il consumo di gas dalla potenza di riscaldamento (%) delle valvole termostatiche o zone (qualsiasi marca, es. tado X; modello m³ = a·giorni + k·Σ%·h). Inserisci l'ultima lettura reale del contatore. a e k sono solo valori iniziali indicativi: k viene affinato automaticamente con le letture.",
+        "data": {
+          "sensors": "Sensori potenza riscaldamento (%)",
+          "a": "Consumo base a (m³/giorno, acqua calda/cottura cibi)",
+          "k": "Coefficiente riscaldamento k (m³ per %·h)",
+          "reading_value": "Ultima lettura contatore (m³)",
+          "reading_date": "Data e ora dell'ultima lettura"
+        },
+        "data_description": {
+          "sensors": "Qualsiasi numero di sensori con unità %, es. sensor.zone_1_heating_power.",
+          "reading_date": "Data e ora locale in cui hai letto il contatore."
+        }
+      }
+    },
+    "error": {
+      "no_sensors": "Seleziona almeno un sensore",
+      "invalid_date": "Data non valida",
+      "date_in_future": "La data della lettura è nel futuro",
+      "invalid_k": "k deve essere maggiore di zero",
+      "not_percent": "Tutti i sensori selezionati devono avere unità di misura %"
+    },
+    "abort": {
+      "already_configured": "Il contatore virtuale è già configurato",
+      "single_instance_allowed": "Il contatore virtuale è già configurato"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni Contatore Gas Virtuale",
+        "description": "Modificare a o k sovrascrive i valori correnti (anche quelli ricalcolati).",
+        "data": {
+          "sensors": "Sensori potenza riscaldamento (%)",
+          "a": "Consumo base a (m³/giorno)",
+          "k": "Coefficiente riscaldamento k (m³ per %·h)",
+          "auto_k": "Ricalcola k automaticamente a ogni nuova lettura",
+          "fix_a": "Mantieni a fisso (altrimenti ricalcola anche a)"
+        }
+      }
+    },
+    "error": {
+      "no_sensors": "Seleziona almeno un sensore",
+      "invalid_k": "k deve essere maggiore di zero",
+      "not_percent": "Tutti i sensori selezionati devono avere unità di misura %"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "estimated_gas": {
+        "name": "Gas stimato"
+      },
+      "heating_index_since_last_reading": {
+        "name": "Indice riscaldamento dall'ultima lettura"
+      },
+      "consumption_since_last_reading": {
+        "name": "Consumo stimato dall'ultima lettura"
+      },
+      "coefficient_k": {
+        "name": "Coefficiente riscaldamento k"
+      },
+      "base_consumption_a": {
+        "name": "Consumo base giornaliero a"
+      },
+      "last_reading": {
+        "name": "Ultima lettura"
+      },
+      "last_interval_error": {
+        "name": "Errore ultimo intervallo"
+      },
+      "consumption_today": {
+        "name": "Consumo oggi",
+        "state_attributes": {
+          "period": {
+            "name": "Periodo"
+          },
+          "base_share": {
+            "name": "Quota base"
+          },
+          "heating_share": {
+            "name": "Quota riscaldamento"
+          },
+          "heating_index": {
+            "name": "Indice riscaldamento"
+          },
+          "start_time": {
+            "name": "Ora inizio"
+          },
+          "hours_without_data": {
+            "name": "Ore senza dati"
+          }
+        }
+      },
+      "consumption_yesterday": {
+        "name": "Consumo ieri",
+        "state_attributes": {
+          "period": {
+            "name": "Periodo"
+          },
+          "base_share": {
+            "name": "Quota base"
+          },
+          "heating_share": {
+            "name": "Quota riscaldamento"
+          },
+          "heating_index": {
+            "name": "Indice riscaldamento"
+          },
+          "hours_without_data": {
+            "name": "Ore senza dati"
+          }
+        }
+      },
+      "consumption_this_month": {
+        "name": "Consumo mese corrente",
+        "state_attributes": {
+          "period": {
+            "name": "Periodo"
+          },
+          "base_share": {
+            "name": "Quota base"
+          },
+          "heating_share": {
+            "name": "Quota riscaldamento"
+          },
+          "heating_index": {
+            "name": "Indice riscaldamento"
+          },
+          "start_time": {
+            "name": "Ora inizio"
+          },
+          "hours_without_data": {
+            "name": "Ore senza dati"
+          }
+        }
+      },
+      "consumption_last_month": {
+        "name": "Consumo mese precedente",
+        "state_attributes": {
+          "period": {
+            "name": "Periodo"
+          },
+          "base_share": {
+            "name": "Quota base"
+          },
+          "heating_share": {
+            "name": "Quota riscaldamento"
+          },
+          "heating_index": {
+            "name": "Indice riscaldamento"
+          },
+          "hours_without_data": {
+            "name": "Ore senza dati"
+          }
+        }
+      }
+    },
+    "number": {
+      "new_reading": {
+        "name": "Nuova lettura contatore"
+      }
+    },
+    "button": {
+      "register_reading": {
+        "name": "Registra lettura"
+      }
+    },
+    "datetime": {
+      "reading_date": {
+        "name": "Data lettura"
+      }
+    }
+  },
+  "exceptions": {
+    "reading_not_found": {
+      "message": "Nessuna lettura trovata per {date}"
+    },
+    "reading_too_old": {
+      "message": "La data della lettura ({date}) deve essere successiva all'ultima lettura ({last})"
+    },
+    "reading_in_future": {
+      "message": "La data della lettura ({date}) è nel futuro"
+    },
+    "reading_too_low": {
+      "message": "La lettura {value} m³ è inferiore all'ultima lettura {last} m³"
+    },
+    "cannot_delete_only": {
+      "message": "Non si può eliminare l'unica lettura presente"
+    },
+    "not_loaded": {
+      "message": "Contatore Gas Virtuale non configurato o non caricato"
+    },
+    "invalid_date": {
+      "message": "Data non valida: {date}"
+    },
+    "no_pending_reading": {
+      "message": "Inserisci prima il valore in 'Nuova lettura contatore'"
+    }
+  },
+  "services": {
+    "register_reading": {
+      "name": "Registra lettura",
+      "description": "Registra una lettura reale del contatore: chiude l'intervallo, riallinea il contatore e (se attivo) ricalcola k.",
+      "fields": {
+        "reading": {
+          "name": "Lettura",
+          "description": "Valore letto sul contatore in m³"
+        },
+        "date": {
+          "name": "Data",
+          "description": "Data e ora della lettura (predefinito: adesso)"
+        },
+        "config_entry_id": {
+          "name": "Voce di configurazione",
+          "description": "Facoltativo"
+        }
+      }
+    },
+    "delete_reading": {
+      "name": "Elimina lettura",
+      "description": "Elimina una lettura (per data); il suo intervallo viene unito al successivo.",
+      "fields": {
+        "date": {
+          "name": "Data",
+          "description": "Data (o data e ora) della lettura da eliminare"
+        },
+        "config_entry_id": {
+          "name": "Voce di configurazione",
+          "description": "Facoltativo"
+        }
+      }
+    },
+    "recalculate": {
+      "name": "Ricalcola coefficienti",
+      "description": "Ricalcola k (e a, se non fisso) con i minimi quadrati su tutti gli intervalli inclusi.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Voce di configurazione",
+          "description": "Facoltativo"
+        }
+      }
+    }
+  }
+}

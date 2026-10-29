@@ -1,0 +1,38 @@
+register_reading:
+  fields:
+    reading:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 9999999
+          step: 0.001
+          mode: box
+          unit_of_measurement: "m³"
+    date:
+      required: false
+      selector:
+        datetime:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: virtual_gas_meter
+delete_reading:
+  fields:
+    date:
+      required: true
+      selector:
+        datetime:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: virtual_gas_meter
+recalculate:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: virtual_gas_meter

@@ -1,0 +1,248 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Virtual Gas Meter",
+        "description": "Estimates gas use from the heating power (%) of your thermostatic valves or heating zones (any brand, e.g. tado X; model m³ = a·days + k·Σ%·h). Enter the last real meter reading. a and k are only rough starting points: k is refined automatically from your readings.",
+        "data": {
+          "sensors": "Heating power sensors (%)",
+          "a": "Base consumption a (m³/day, hot water/cooking)",
+          "k": "Heating coefficient k (m³ per %·h)",
+          "reading_value": "Last meter reading (m³)",
+          "reading_date": "Date and time of the last reading"
+        },
+        "data_description": {
+          "sensors": "Any number of sensors with unit %, e.g. sensor.zone_1_heating_power.",
+          "reading_date": "Local date and time when you read the meter."
+        }
+      }
+    },
+    "error": {
+      "no_sensors": "Select at least one sensor",
+      "invalid_date": "Invalid date",
+      "date_in_future": "The reading date is in the future",
+      "invalid_k": "k must be greater than zero",
+      "not_percent": "All selected sensors must have unit of measurement %"
+    },
+    "abort": {
+      "already_configured": "The virtual meter is already configured",
+      "single_instance_allowed": "The virtual meter is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Virtual Gas Meter options",
+        "description": "Changing a or k overwrites the current values (including refitted ones).",
+        "data": {
+          "sensors": "Heating power sensors (%)",
+          "a": "Base consumption a (m³/day)",
+          "k": "Heating coefficient k (m³ per %·h)",
+          "auto_k": "Refit k automatically on every new reading",
+          "fix_a": "Keep a fixed (otherwise refit a too)"
+        }
+      }
+    },
+    "error": {
+      "no_sensors": "Select at least one sensor",
+      "invalid_k": "k must be greater than zero",
+      "not_percent": "All selected sensors must have unit of measurement %"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "estimated_gas": {
+        "name": "Estimated gas"
+      },
+      "heating_index_since_last_reading": {
+        "name": "Heating index since last reading"
+      },
+      "consumption_since_last_reading": {
+        "name": "Estimated consumption since last reading"
+      },
+      "coefficient_k": {
+        "name": "Heating coefficient k"
+      },
+      "base_consumption_a": {
+        "name": "Daily base consumption a"
+      },
+      "last_reading": {
+        "name": "Last reading"
+      },
+      "last_interval_error": {
+        "name": "Last interval error"
+      },
+      "consumption_today": {
+        "name": "Consumption today",
+        "state_attributes": {
+          "period": {
+            "name": "Period"
+          },
+          "base_share": {
+            "name": "Base share"
+          },
+          "heating_share": {
+            "name": "Heating share"
+          },
+          "heating_index": {
+            "name": "Heating index"
+          },
+          "start_time": {
+            "name": "Start time"
+          },
+          "hours_without_data": {
+            "name": "Hours without data"
+          }
+        }
+      },
+      "consumption_yesterday": {
+        "name": "Consumption yesterday",
+        "state_attributes": {
+          "period": {
+            "name": "Period"
+          },
+          "base_share": {
+            "name": "Base share"
+          },
+          "heating_share": {
+            "name": "Heating share"
+          },
+          "heating_index": {
+            "name": "Heating index"
+          },
+          "hours_without_data": {
+            "name": "Hours without data"
+          }
+        }
+      },
+      "consumption_this_month": {
+        "name": "Consumption this month",
+        "state_attributes": {
+          "period": {
+            "name": "Period"
+          },
+          "base_share": {
+            "name": "Base share"
+          },
+          "heating_share": {
+            "name": "Heating share"
+          },
+          "heating_index": {
+            "name": "Heating index"
+          },
+          "start_time": {
+            "name": "Start time"
+          },
+          "hours_without_data": {
+            "name": "Hours without data"
+          }
+        }
+      },
+      "consumption_last_month": {
+        "name": "Consumption last month",
+        "state_attributes": {
+          "period": {
+            "name": "Period"
+          },
+          "base_share": {
+            "name": "Base share"
+          },
+          "heating_share": {
+            "name": "Heating share"
+          },
+          "heating_index": {
+            "name": "Heating index"
+          },
+          "hours_without_data": {
+            "name": "Hours without data"
+          }
+        }
+      }
+    },
+    "number": {
+      "new_reading": {
+        "name": "New meter reading"
+      }
+    },
+    "button": {
+      "register_reading": {
+        "name": "Register reading"
+      }
+    },
+    "datetime": {
+      "reading_date": {
+        "name": "Reading date"
+      }
+    }
+  },
+  "exceptions": {
+    "reading_not_found": {
+      "message": "No reading found for {date}"
+    },
+    "reading_too_old": {
+      "message": "The reading date ({date}) must be after the last reading ({last})"
+    },
+    "reading_in_future": {
+      "message": "The reading date ({date}) is in the future"
+    },
+    "reading_too_low": {
+      "message": "The reading {value} m³ is lower than the last reading {last} m³"
+    },
+    "cannot_delete_only": {
+      "message": "Cannot delete the only reading"
+    },
+    "not_loaded": {
+      "message": "Virtual Gas Meter is not configured or not loaded"
+    },
+    "invalid_date": {
+      "message": "Invalid date: {date}"
+    },
+    "no_pending_reading": {
+      "message": "Enter a value in 'New meter reading' first"
+    }
+  },
+  "services": {
+    "register_reading": {
+      "name": "Register reading",
+      "description": "Registers a real meter reading: closes the interval, realigns the meter and (if enabled) refits k.",
+      "fields": {
+        "reading": {
+          "name": "Reading",
+          "description": "Meter value in m³"
+        },
+        "date": {
+          "name": "Date",
+          "description": "Date and time of the reading (default: now)"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional"
+        }
+      }
+    },
+    "delete_reading": {
+      "name": "Delete reading",
+      "description": "Deletes a reading (by date); its interval is merged into the next one.",
+      "fields": {
+        "date": {
+          "name": "Date",
+          "description": "Date (or date and time) of the reading to delete"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional"
+        }
+      }
+    },
+    "recalculate": {
+      "name": "Recalculate coefficients",
+      "description": "Refits k (and a, if not fixed) by least squares over all included intervals.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional"
+        }
+      }
+    }
+  }
+}

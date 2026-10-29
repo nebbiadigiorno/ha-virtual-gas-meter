@@ -1,0 +1,18 @@
+{
+  "domain": "virtual_gas_meter",
+  "name": "Virtual Gas Meter",
+  "codeowners": [
+    "@nebbiadigiorno"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "recorder"
+  ],
+  "documentation": "https://github.com/nebbiadigiorno/ha-virtual-gas-meter",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/nebbiadigiorno/ha-virtual-gas-meter/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.2.0"
+}

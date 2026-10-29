@@ -25,7 +25,6 @@ class GasEntity(Entity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, engine.entry.entry_id)},
             name=NAME,
-            manufacturer="Modello calibrato",
             model="m³ = a·days + k·Σ%·h",
             entry_type=DeviceEntryType.SERVICE,
         )

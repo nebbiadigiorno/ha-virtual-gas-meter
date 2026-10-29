@@ -36,7 +36,7 @@ def _readings_attr(engine: GasMeterEngine) -> list[dict[str, Any]]:
             "days": None if r.get("days") is None else round(r["days"], 3),
             "m3": r.get("m3"),
             "estimated_m3": r.get("estimated_m3"),
-            "errore_m3": r.get("error_m3"),
+            "error_m3": r.get("error_m3"),
             "excluded_from_fit": bool(r.get("excluded")),
         }
         for r in engine.readings
@@ -64,7 +64,7 @@ def _error_attrs(e: GasMeterEngine) -> dict[str, Any]:
     attrs: dict[str, Any] = {
         "date": _local(r["date"]),
         "estimated_m3": r.get("estimated_m3"),
-        "reale_m3": r.get("m3"),
+        "real_m3": r.get("m3"),
     }
     if r.get("m3"):
         attrs["error_percent"] = round(100 * r["error_m3"] / r["m3"], 2)

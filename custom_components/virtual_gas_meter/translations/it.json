@@ -199,6 +199,9 @@
     },
     "no_pending_reading": {
       "message": "Inserisci prima il valore in 'Nuova lettura contatore'"
+    },
+    "cannot_include": {
+      "message": "La lettura del {date} non ha un intervallo completo e non può essere inclusa nel calcolo"
     }
   },
   "services": {
@@ -227,6 +230,24 @@
         "date": {
           "name": "Data",
           "description": "Data (o data e ora) della lettura da eliminare"
+        },
+        "config_entry_id": {
+          "name": "Voce di configurazione",
+          "description": "Facoltativo"
+        }
+      }
+    },
+    "exclude_reading": {
+      "name": "Escludi lettura dal calcolo",
+      "description": "Esclude dal calcolo dei coefficienti l'intervallo che termina con una lettura (o lo include di nuovo) e ricalcola.",
+      "fields": {
+        "date": {
+          "name": "Data",
+          "description": "Data (o data e ora) della lettura"
+        },
+        "exclude": {
+          "name": "Escludi",
+          "description": "Attivo = escludi dal calcolo, disattivo = includi di nuovo"
         },
         "config_entry_id": {
           "name": "Voce di configurazione",

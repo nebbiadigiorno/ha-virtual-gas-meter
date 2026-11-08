@@ -199,6 +199,9 @@
     },
     "no_pending_reading": {
       "message": "Enter a value in 'New meter reading' first"
+    },
+    "cannot_include": {
+      "message": "The reading of {date} has no complete interval and cannot be included in the fit"
     }
   },
   "services": {
@@ -227,6 +230,24 @@
         "date": {
           "name": "Date",
           "description": "Date (or date and time) of the reading to delete"
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional"
+        }
+      }
+    },
+    "exclude_reading": {
+      "name": "Exclude reading from fit",
+      "description": "Excludes the interval ending at a reading from the coefficient fit (or includes it again) and refits.",
+      "fields": {
+        "date": {
+          "name": "Date",
+          "description": "Date (or date and time) of the reading"
+        },
+        "exclude": {
+          "name": "Exclude",
+          "description": "On = exclude from the fit, off = include again"
         },
         "config_entry_id": {
           "name": "Config entry",

@@ -14,6 +14,9 @@ Structure stored in the engine data under ``"periods"``::
         "start": ISO UTC of the first instant actually covered,
         "base": m³ (a·Δt), "heat": m³ (k·ΔI), "index": %·h,
         "missing_h": hours without data (skipped downtime),
+        "filled_h": hours estimated from the hourly profile because the
+                    sensors were unavailable (weighted by the share of
+                    sensors missing),
     }
 
 Period boundaries are local midnight / first of month in HA's time zone,
@@ -62,6 +65,7 @@ def new_bucket(key: str, period_start: datetime, start: datetime) -> dict[str, A
         "heat": 0.0,
         "index": 0.0,
         "missing_h": 0.0,
+        "filled_h": 0.0,
     }
 
 
@@ -112,8 +116,12 @@ def add_increment(
     *,
     a: float,
     k: float,
+    filled_h: float = 0.0,
 ) -> None:
-    """Add a·Δt + k·ΔI for [t0, t1); ΔI is spread uniformly over the span."""
+    """Add a·Δt + k·ΔI for [t0, t1); ΔI is spread uniformly over the span.
+
+    filled_h (hours estimated from the profile) is spread the same way.
+    """
     total_s = (t1 - t0).total_seconds()
     if total_s <= 0:
         return
@@ -127,6 +135,10 @@ def add_increment(
             bucket["base"] += a * sec / 86400.0
             bucket["heat"] += k * di
             bucket["index"] += di
+            if filled_h:
+                bucket["filled_h"] = (
+                    bucket.get("filled_h", 0.0) + filled_h * sec / total_s
+                )
 
 
 def add_missing(periods: dict[str, Any], t0: datetime, t1: datetime) -> None:

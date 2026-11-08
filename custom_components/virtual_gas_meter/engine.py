@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timedelta
 import logging
+import math
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -46,6 +47,9 @@ from .const import (
     DEFAULT_FIX_A,
     DEFAULT_K,
     DOMAIN,
+    MAX_FILLED_FRACTION,
+    PROFILE_SEED_DAYS,
+    PROFILE_TAU,
     SAVE_DELAY,
     STORAGE_VERSION,
     TICK_INTERVAL,
@@ -83,14 +87,33 @@ def _ts(iso: str) -> float:
     return dt_util.parse_datetime(iso).timestamp()
 
 
-def _state_value(state: State | None) -> float:
-    """Return the heating power of a state; unavailable/unknown/invalid -> 0."""
+def _state_value(state: State | None) -> float | None:
+    """Return the heating power of a state; None if unavailable/unknown/invalid.
+
+    None means "no data": the engine estimates the value from the sensor's
+    hourly profile instead of counting it as 0 %.
+    """
     if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
-        return 0.0
+        return None
     try:
-        return max(float(state.state), 0.0)
+        value = float(state.state)
     except (TypeError, ValueError):
-        return 0.0
+        return None
+    if not math.isfinite(value):
+        return None
+    return max(value, 0.0)
+
+
+def _hour_pieces(t0: datetime, t1: datetime) -> list[tuple[datetime, datetime]]:
+    """Split [t0, t1) at whole hours, so each piece is in one hour slot."""
+    out: list[tuple[datetime, datetime]] = []
+    cur = t0
+    while cur < t1:
+        top = cur.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        nxt = min(top, t1)
+        out.append((cur, nxt))
+        cur = nxt
+    return out
 
 
 class GasMeterEngine:
@@ -104,7 +127,7 @@ class GasMeterEngine:
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}"
         )
         self.data: dict[str, Any] = {}
-        self._values: dict[str, float] = {}
+        self._values: dict[str, float | None] = {}
         self._unsubs: list[Callable[[], None]] = []
         self.backfill_report: dict[str, Any] = {}
 
@@ -160,6 +183,16 @@ class GasMeterEngine:
         return float(self.data["index_since"])
 
     @property
+    def filled_h_since(self) -> float:
+        """Sensor-weighted hours estimated from the profile since the last reading."""
+        return float(self.data.get("filled_h_since", 0.0))
+
+    @property
+    def filled_index_since(self) -> float:
+        """Part of index_since (%·h) that was estimated from the profile."""
+        return float(self.data.get("filled_index_since", 0.0))
+
+    @property
     def last_update(self) -> datetime:
         """Return the instant up to which the index has been integrated."""
         return dt_util.parse_datetime(self.data["last_update"])
@@ -212,6 +245,10 @@ class GasMeterEngine:
             self.data = stored
         # Added in 0.1.2: older stores start the period accumulators now.
         self.data.setdefault("periods", {})
+        # Added in 0.3.0: hourly profiles and filled-hours counters.
+        self.data.setdefault("profile", {})
+        self.data.setdefault("filled_h_since", 0.0)
+        self.data.setdefault("filled_index_since", 0.0)
         self._apply_options()
 
     def _initial_data(self) -> dict[str, Any]:
@@ -254,6 +291,9 @@ class GasMeterEngine:
             "pending_reading_date": None,
             "last_fit": None,
             "periods": {},
+            "profile": {},
+            "filled_h_since": 0.0,
+            "filled_index_since": 0.0,
         }
 
     @staticmethod
@@ -309,6 +349,7 @@ class GasMeterEngine:
         self._values = {
             eid: _state_value(self.hass.states.get(eid)) for eid in self.sensors
         }
+        await self._async_seed_profile(now)
         gap = now - self.last_update
         if gap >= BACKFILL_MIN_GAP:
             await self._async_backfill(self.last_update, now)
@@ -353,18 +394,120 @@ class GasMeterEngine:
 
     # ------------------------------------------------------------- integration
     def _integrate(self, now: datetime) -> None:
-        """Integrate the current values from last_update up to now."""
-        dt_s = (now - self.last_update).total_seconds()
-        if dt_s <= 0:
+        """Integrate the current values from last_update up to now.
+
+        Sensors without data (None) are not counted as 0 %: their power is
+        taken from their hourly profile. Valid values teach the profile.
+        """
+        start = self.last_update
+        if now <= start:
             return
-        power = sum(self._values.get(eid, 0.0) for eid in self.sensors)
-        d_index = power * dt_s / 3600.0
-        per.add_increment(
-            self.data["periods"], self.last_update, now, d_index, a=self.a, k=self.k
-        )
-        self.data["index_since"] = self.index_since + d_index
+        sensors = self.sensors
+        for t0, t1 in _hour_pieces(start, now):
+            dt_s = (t1 - t0).total_seconds()
+            hour = dt_util.as_local(t0).hour
+            power = 0.0
+            filled_power = 0.0
+            missing = 0
+            for eid in sensors:
+                value = self._values.get(eid)
+                if value is None:
+                    fill = self._fill_value(eid, hour)
+                    filled_power += fill
+                    power += fill
+                    missing += 1
+                else:
+                    power += value
+                    self._learn(eid, hour, value, dt_s)
+            d_index = power * dt_s / 3600.0
+            filled_h = missing / len(sensors) * dt_s / 3600.0 if sensors else 0.0
+            per.add_increment(
+                self.data["periods"],
+                t0,
+                t1,
+                d_index,
+                a=self.a,
+                k=self.k,
+                filled_h=filled_h,
+            )
+            self.data["index_since"] = self.index_since + d_index
+            if missing:
+                self.data["filled_h_since"] = self.filled_h_since + filled_h
+                self.data["filled_index_since"] = (
+                    self.filled_index_since + filled_power * dt_s / 3600.0
+                )
         self.data["last_update"] = now.isoformat()
         self._maybe_checkpoint(now)
+
+    # ---------------------------------------------------------- hourly profile
+    def _learn(self, eid: str, hour: int, value: float, dt_s: float) -> None:
+        """Update the sensor's profile slot for this local hour."""
+        prof = self.data["profile"].get(eid)
+        if not isinstance(prof, list) or len(prof) != 24:
+            prof = [None] * 24
+            self.data["profile"][eid] = prof
+        cur = prof[hour]
+        if cur is None:
+            prof[hour] = value
+        else:
+            alpha = 1.0 - math.exp(-dt_s / PROFILE_TAU.total_seconds())
+            prof[hour] = cur + (value - cur) * alpha
+
+    def _fill_value(self, eid: str, hour: int) -> float:
+        """Estimated power of a sensor without data at this local hour."""
+        prof = self.data["profile"].get(eid)
+        if not isinstance(prof, list) or len(prof) != 24:
+            return 0.0
+        if prof[hour] is not None:
+            return float(prof[hour])
+        known = [float(v) for v in prof if v is not None]
+        return sum(known) / len(known) if known else 0.0
+
+    async def _async_seed_profile(self, now: datetime) -> None:
+        """Seed empty profiles from recent recorder hourly statistics."""
+        profiles = self.data["profile"]
+        empty = [
+            eid
+            for eid in self.sensors
+            if not any(v is not None for v in (profiles.get(eid) or []))
+        ]
+        if not empty:
+            return
+        start = (now - timedelta(days=PROFILE_SEED_DAYS)).replace(
+            minute=0, second=0, microsecond=0
+        )
+        try:
+            stats = await self._async_fetch_statistics(start, now, "hour")
+        except Exception:
+            _LOGGER.warning(
+                "Could not read recorder statistics to seed the hourly profiles",
+                exc_info=True,
+            )
+            return
+        seeded = 0
+        for eid in empty:
+            sums = [0.0] * 24
+            counts = [0] * 24
+            for row in stats.get(eid, []):
+                row_start = row.get("start")
+                mean = row.get("mean")
+                if row_start is None or mean is None:
+                    continue
+                if not isinstance(row_start, datetime):
+                    row_start = dt_util.utc_from_timestamp(float(row_start))
+                hour = dt_util.as_local(row_start).hour
+                sums[hour] += max(float(mean), 0.0)
+                counts[hour] += 1
+            if any(counts):
+                profiles[eid] = [
+                    sums[h] / counts[h] if counts[h] else None for h in range(24)
+                ]
+                seeded += 1
+        _LOGGER.info(
+            "Hourly profiles seeded from statistics for %d of %d sensors",
+            seeded,
+            len(empty),
+        )
 
     def _catch_up(self, now: datetime) -> None:
         """Apply sensor changes not yet seen by the listener, then integrate.
@@ -377,11 +520,11 @@ class GasMeterEngine:
         change in chronological order, so nothing is attributed to the wrong
         value regardless of callback ordering.
         """
-        pending: list[tuple[datetime, str, float]] = []
+        pending: list[tuple[datetime, str, float | None]] = []
         for eid in self.sensors:
             state = self.hass.states.get(eid)
             value = _state_value(state)
-            if value != self._values.get(eid, 0.0):
+            if eid not in self._values or value != self._values[eid]:
                 changed = state.last_changed if state is not None else now
                 pending.append((min(changed, now), eid, value))
         for changed, eid, value in sorted(pending):
@@ -604,19 +747,51 @@ class GasMeterEngine:
         )
         reading["excluded"] = False
         reading["source"] = "user"
+
+        # Share of the interval estimated from the profile (sensors without
+        # data). When the reading is dated in the past, the filled hours are
+        # split in proportion to time.
+        span = (now - last_dt).total_seconds()
+        frac = (
+            min(max((when - last_dt).total_seconds() / span, 0.0), 1.0)
+            if span > 0
+            else 1.0
+        )
+        filled_h = self.filled_h_since * frac
+        filled_index = self.filled_index_since * frac
+        reading["filled_h"] = round(filled_h, 3)
+        reading["filled_index"] = round(filled_index, 1)
+        hours = (reading["days"] or 0.0) * 24
+        share = filled_h / hours if hours > 0 else 0.0
+        if share > MAX_FILLED_FRACTION:
+            reading["excluded"] = True
+            reading["exclusion"] = "automatic"
+            _LOGGER.warning(
+                "Reading %s: %.1f h (%.0f%%) of the interval had no sensor data "
+                "and were estimated; interval excluded from the fit",
+                when,
+                filled_h,
+                100 * share,
+            )
         self.readings.append(reading)
         _LOGGER.info(
-            "Reading %.3f m3 at %s: interval %.2f days, I=%.1f %%·h, "
-            "real %.3f m3, estimated %.3f m3",
+            "Reading %.3f m3 at %s: interval %.2f days, I=%.1f %%·h "
+            "(estimated %.1f %%·h over %.1f h), real %.3f m3, estimated %.3f m3",
             value,
             when,
             reading["days"],
             index_at,
+            filled_index,
+            filled_h,
             reading["m3"],
             reading["estimated_m3"],
         )
 
         # Carry what was accumulated after the reading into the new interval.
+        self.data["filled_h_since"] = max(self.filled_h_since - filled_h, 0.0)
+        self.data["filled_index_since"] = max(
+            self.filled_index_since - filled_index, 0.0
+        )
         self.data["index_since"] = max(self.index_since - index_at, 0.0)
         self.data["checkpoints"] = [
             [t, v - index_at]
@@ -670,6 +845,12 @@ class GasMeterEngine:
                 )
             rem_ts = _ts(removed["date"])
             self.data["index_since"] = self.index_since + add
+            self.data["filled_h_since"] = self.filled_h_since + float(
+                removed.get("filled_h") or 0.0
+            )
+            self.data["filled_index_since"] = self.filled_index_since + float(
+                removed.get("filled_index") or 0.0
+            )
             self.data["checkpoints"] = [[rem_ts, add]] + [
                 [t, v + add] for t, v in self.data["checkpoints"]
             ]
@@ -701,12 +882,55 @@ class GasMeterEngine:
                 removed.get("excluded") or nxt.get("excluded") or new_index is None
             )
             rebuilt["source"] = nxt.get("source")
+            for key in ("filled_h", "filled_index"):
+                if removed.get(key) is not None or nxt.get(key) is not None:
+                    rebuilt[key] = float(removed.get(key) or 0.0) + float(
+                        nxt.get(key) or 0.0
+                    )
+            if rebuilt["excluded"]:
+                rebuilt["exclusion"] = (
+                    nxt.get("exclusion") or removed.get("exclusion") or "automatic"
+                )
             self.readings[idx] = rebuilt
         _LOGGER.info("Deleted reading %s (%s m3)", removed["date"], removed["value"])
         if self.auto_k:
             self._refit()
         self._after_change()
         return removed
+
+    def set_excluded(self, when: datetime, excluded: bool) -> dict[str, Any]:
+        """Exclude a reading's interval from the fit, or include it again."""
+        idx = self._find_reading(dt_util.as_utc(when))
+        reading = self.readings[idx]
+        if not excluded and (
+            idx == 0
+            or reading.get("index") is None
+            or reading.get("m3") is None
+            or not reading.get("days")
+        ):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="cannot_include",
+                translation_placeholders={
+                    "date": str(
+                        dt_util.as_local(dt_util.parse_datetime(reading["date"]))
+                    )
+                },
+            )
+        reading["excluded"] = excluded
+        if excluded:
+            reading["exclusion"] = "manual"
+        else:
+            reading.pop("exclusion", None)
+        _LOGGER.info(
+            "Reading %s %s the fit",
+            reading["date"],
+            "excluded from" if excluded else "included in",
+        )
+        if self.auto_k:
+            self._refit()
+        self._after_change()
+        return reading
 
     def recalculate(self) -> dict[str, Any] | None:
         """Refit the coefficients now (regardless of the auto setting)."""

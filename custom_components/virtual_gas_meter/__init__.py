@@ -21,9 +21,11 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_DATE,
+    ATTR_EXCLUDE,
     ATTR_READING,
     DOMAIN,
     SERVICE_DELETE,
+    SERVICE_EXCLUDE,
     SERVICE_RECALC,
     SERVICE_REGISTER,
 )
@@ -55,6 +57,13 @@ DELETE_SCHEMA = vol.Schema(
     }
 )
 RECALC_SCHEMA = vol.Schema({vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string})
+EXCLUDE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DATE): cv.string,
+        vol.Optional(ATTR_EXCLUDE, default=True): cv.boolean,
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+    }
+)
 
 
 def _engine(hass: HomeAssistant, call: ServiceCall) -> GasMeterEngine:
@@ -104,6 +113,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         fit = engine.recalculate()
         return {"fit": fit, "a": engine.a, "k": engine.k}
 
+    async def exclude(call: ServiceCall) -> ServiceResponse:
+        engine = _engine(hass, call)
+        reading = engine.set_excluded(
+            _parse_date(call.data[ATTR_DATE]), call.data[ATTR_EXCLUDE]
+        )
+        return {"reading": reading, "a": engine.a, "k": engine.k}
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_EXCLUDE, exclude, EXCLUDE_SCHEMA, SupportsResponse.OPTIONAL
+    )
     hass.services.async_register(
         DOMAIN, SERVICE_REGISTER, register, REGISTER_SCHEMA, SupportsResponse.OPTIONAL
     )

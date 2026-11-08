@@ -38,9 +38,22 @@ def _readings_attr(engine: GasMeterEngine) -> list[dict[str, Any]]:
             "estimated_m3": r.get("estimated_m3"),
             "error_m3": r.get("error_m3"),
             "excluded_from_fit": bool(r.get("excluded")),
+            **({"exclusion": r["exclusion"]} if r.get("exclusion") else {}),
+            **(
+                {"estimated_hours": round(r["filled_h"], 2)}
+                if r.get("filled_h") is not None
+                else {}
+            ),
         }
         for r in engine.readings
     ]
+
+
+def _share(filled_h: float, days: float | None) -> float | None:
+    """Percentage of an interval estimated from the profile."""
+    if not days:
+        return None
+    return round(100 * filled_h / (days * 24), 1)
 
 
 def _total_attrs(e: GasMeterEngine) -> dict[str, Any]:
@@ -56,6 +69,9 @@ def _since_attrs(e: GasMeterEngine) -> dict[str, Any]:
         "days": round(e.days_since, 4),
         "base_share": round(e.a * e.days_since, 4),
         "heating_share": round(e.k * e.index_since, 4),
+        "estimated_hours": round(e.filled_h_since, 2),
+        "estimated_percent": _share(e.filled_h_since, e.days_since),
+        "estimated_index": round(e.filled_index_since, 1),
     }
 
 
@@ -66,8 +82,14 @@ def _error_attrs(e: GasMeterEngine) -> dict[str, Any]:
         "estimated_m3": r.get("estimated_m3"),
         "real_m3": r.get("m3"),
     }
-    if r.get("m3"):
+    if r.get("m3") and r.get("error_m3") is not None:
         attrs["error_percent"] = round(100 * r["error_m3"] / r["m3"], 2)
+    attrs["excluded_from_fit"] = bool(r.get("excluded"))
+    if r.get("exclusion"):
+        attrs["exclusion"] = r["exclusion"]
+    if r.get("filled_h") is not None:
+        attrs["estimated_hours"] = round(r["filled_h"], 2)
+        attrs["estimated_percent"] = _share(r["filled_h"], r.get("days"))
     return attrs
 
 
@@ -104,6 +126,8 @@ def _period_attrs(kind: str) -> Callable[[GasMeterEngine], dict[str, Any]]:
             attrs["start_time"] = _local(b["start"])
         if b.get("missing_h"):
             attrs["hours_without_data"] = round(b["missing_h"], 2)
+        if b.get("filled_h"):
+            attrs["estimated_hours"] = round(b["filled_h"], 2)
         return attrs
 
     return fn

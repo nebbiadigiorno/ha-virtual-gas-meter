@@ -38,11 +38,26 @@ CHECKPOINT_INTERVAL: Final = timedelta(hours=1)
 # being backfilled from statistics.
 BACKFILL_MIN_GAP: Final = timedelta(minutes=5)
 
+# Sensors that are unavailable/unknown are not counted as 0 %: their power is
+# estimated from a per-sensor hourly profile (one value per local hour of the
+# day), learnt from the sensor's own valid values. Each hour slot follows an
+# exponential average with this time constant measured in time spent in that
+# slot, so 3 h of slot time ~ the same hour of the last 3 days.
+PROFILE_TAU: Final = timedelta(hours=3)
+# On first start the profile is seeded from this many days of recorder
+# hourly statistics.
+PROFILE_SEED_DAYS: Final = 7
+# An interval whose estimated (filled) share of sensor-hours exceeds this
+# fraction is excluded automatically from the coefficient fit.
+MAX_FILLED_FRACTION: Final = 0.10
+
 SERVICE_REGISTER: Final = "register_reading"
 SERVICE_DELETE: Final = "delete_reading"
 SERVICE_RECALC: Final = "recalculate"
+SERVICE_EXCLUDE: Final = "exclude_reading"
 ATTR_READING: Final = "reading"
 ATTR_DATE: Final = "date"
+ATTR_EXCLUDE: Final = "exclude"
 ATTR_CONFIG_ENTRY_ID: Final = "config_entry_id"
 
 

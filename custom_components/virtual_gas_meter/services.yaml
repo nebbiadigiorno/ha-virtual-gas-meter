@@ -29,6 +29,22 @@ delete_reading:
       selector:
         config_entry:
           integration: virtual_gas_meter
+exclude_reading:
+  fields:
+    date:
+      required: true
+      selector:
+        datetime:
+    exclude:
+      required: false
+      default: true
+      selector:
+        boolean:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: virtual_gas_meter
 recalculate:
   fields:
     config_entry_id:

@@ -66,18 +66,22 @@ async def test_accumulation_with_unavailable(
     await hass.async_block_till_done()
     await _advance(hass, freezer, timedelta(hours=1))
     assert engine.index_since == pytest.approx(80.0, rel=1e-6)
+    # Sensors without data are estimated from their hourly profile (here the
+    # only known hour: S1 50 %, S2 30 %), not counted as 0 %.
     hass.states.async_set(S2, STATE_UNAVAILABLE)
     await hass.async_block_till_done()
     await _advance(hass, freezer, timedelta(minutes=30))
-    assert engine.index_since == pytest.approx(80.0 + 25.0, rel=1e-6)
+    assert engine.index_since == pytest.approx(80.0 + 25.0 + 15.0, rel=1e-6)
     hass.states.async_set(S1, "unknown")
     await hass.async_block_till_done()
     await _advance(hass, freezer, timedelta(hours=2))
-    assert engine.index_since == pytest.approx(105.0, rel=1e-6)
+    assert engine.index_since == pytest.approx(120.0 + 160.0, rel=1e-6)
+    # Half of the sensors for 0.5 h, then all of them for 2 h.
+    assert engine.filled_h_since == pytest.approx(0.25 + 2.0, rel=1e-6)
     assert _state(hass, entry, "heating_index_since_last_reading") == pytest.approx(
-        105.0
+        280.0
     )
-    expected = 0.1 * engine.days_since + engine.k * 105.0
+    expected = 0.1 * engine.days_since + engine.k * 280.0
     assert _state(hass, entry, "consumption_since_last_reading") == pytest.approx(
         expected, abs=1e-3
     )

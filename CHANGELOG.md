@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+- Sensors that are `unavailable`/`unknown` (e.g. during a cloud outage of the thermostat vendor) are no longer counted as 0 %. Their power is estimated from a per-sensor hourly profile (one value per local hour, learnt from the sensor's own values and seeded on first start from 7 days of recorder statistics).
+- Estimated hours are reported as `estimated_hours` on the period sensors, on *Estimated consumption since last reading* (with `estimated_percent` and `estimated_index`), on *Last interval error* and in the readings history.
+- An interval in which more than 10 % of the time was estimated is automatically excluded from the coefficient fit (`exclusion: automatic`), so outages no longer bias k.
+- New service `exclude_reading` (`date`, `exclude`) to exclude a reading's interval from the fit, or include it again, and refit.
+- *Last interval error* now also shows `excluded_from_fit`.
+- Existing stored data is kept: only new fields are added.
+
 ## 0.2.0
 - README rewritten in English with a full description, entity/service tables and screenshots (`docs/images/`, demo data).
 - Reading history attribute `errore_m3` renamed to `error_m3`; *Last interval error* attribute `reale_m3` renamed to `real_m3`.

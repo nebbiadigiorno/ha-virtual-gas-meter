@@ -27,11 +27,15 @@ Any brand will do. The result is a regular `gas` sensor you can add to the
   long-term statistics.
 - **Gap backfill:** after a restart or downtime, the missed heating index is rebuilt
   from recorder statistics.
+- **Sensor outages handled:** when a heating sensor is `unavailable`/`unknown` (for
+  example a cloud outage), its power is estimated from its own hourly profile instead of
+  being counted as 0 %. Intervals with too many estimated hours are kept out of the
+  calibration.
 - **Period sensors:** today, yesterday, this month and last month, each split into a base
   share and a heating share.
 - **Diagnostics:** the current coefficients `a` and `k`, the error of the last closed
   interval, and the full reading history as attributes.
-- **UI controls and services** to register, delete or recalculate readings.
+- **UI controls and services** to register, delete, exclude or recalculate readings.
 - English and Italian translations, UI-only setup (config flow) and HACS support.
 
 ## How it works
@@ -43,7 +47,7 @@ Any brand will do. The result is a regular `gas` sensor you can add to the
 | Symbol | Meaning |
 | --- | --- |
 | `a` | Daily base consumption (hot water, cooking), m³/day |
-| `I` | Heating index: the sum over all selected sensors of their % integrated over time (%·h). `unavailable`/`unknown` count as 0 |
+| `I` | Heating index: the sum over all selected sensors of their % integrated over time (%·h). `unavailable`/`unknown` values are estimated (see below) |
 | `k` | Heating coefficient: m³ of gas per %·h |
 
 For example, a valve at 50 % for 2 hours adds 100 %·h to the index. With k = 0.005, that
@@ -62,6 +66,24 @@ If *Keep a fixed* is turned off, a and k are fitted together. This needs at leas
 intervals. The more readings you enter, the better the estimate gets. Readings taken a
 few weeks apart during the heating season work best. The *Last reading* entity keeps the
 history of every interval: estimated vs. real m³ and the error.
+
+### Sensor outages
+
+Heating sensors sometimes have no data, for example during a cloud outage of the
+thermostat vendor. Counting those hours as 0 % would make the estimate too low and, worse,
+would push k up at the next reading. Instead:
+
+- **Hourly profile:** for every sensor the integration learns one value per local hour of
+  the day (an exponential average, roughly the same hour over the last 3 days). On first
+  start it is seeded from the last 7 days of recorder statistics.
+- **Estimation:** while a sensor is `unavailable`/`unknown`, its power is taken from the
+  profile for that hour. These hours are reported as `estimated_hours` (weighted by the
+  share of sensors missing) on the period sensors and on *Estimated consumption since last
+  reading*.
+- **Fit protection:** when a reading closes an interval in which more than **10 %** of the
+  time was estimated, that interval is automatically excluded from the calibration
+  (`exclusion: automatic` in the readings history). Use the `exclude_reading` service to
+  exclude or include any reading by hand.
 
 ### A total that never decreases
 
@@ -111,12 +133,12 @@ You can change the sensors, a, k, *Refit k automatically* and *Keep a fixed* lat
 | --- | --- | --- |
 | Estimated gas | sensor (m³, `gas`, `total_increasing`) | The virtual meter. Attributes: `raw_estimate`, `compensation_active`, `last_update` |
 | Heating index since last reading | sensor (%·h) | Index I accumulated since the last reading |
-| Estimated consumption since last reading | sensor (m³) | a · days + k · I since the last reading |
-| Last reading | sensor (m³) | Last real reading. Attributes: `date` and `readings` (date, value, index, days, m3, estimated_m3, error_m3, excluded_from_fit for each reading) |
-| Consumption today / yesterday / this month / last month | sensor (m³) | Model increments per period. Attributes: `period`, `base_share`, `heating_share`, `heating_index`, `start_time`, `hours_without_data` |
+| Estimated consumption since last reading | sensor (m³) | a · days + k · I since the last reading. Attributes: `days`, `base_share`, `heating_share`, `estimated_hours`, `estimated_percent`, `estimated_index` |
+| Last reading | sensor (m³) | Last real reading. Attributes: `date` and `readings` (date, value, index, days, m3, estimated_m3, error_m3, excluded_from_fit, exclusion, estimated_hours for each reading) |
+| Consumption today / yesterday / this month / last month | sensor (m³) | Model increments per period. Attributes: `period`, `base_share`, `heating_share`, `heating_index`, `start_time`, `hours_without_data`, `estimated_hours` |
 | Daily base consumption a | diagnostic sensor (m³/d) | Current a |
 | Heating coefficient k | diagnostic sensor (m³/%·h) | Current k |
-| Last interval error | diagnostic sensor (m³) | Estimate − real for the last closed interval. Attributes: `date`, `estimated_m3`, `real_m3`, `error_percent` |
+| Last interval error | diagnostic sensor (m³) | Estimate − real for the last closed interval. Attributes: `date`, `estimated_m3`, `real_m3`, `error_percent`, `excluded_from_fit`, `exclusion`, `estimated_hours`, `estimated_percent` |
 | New meter reading | number (m³) | Value to register |
 | Reading date | datetime | Optional date/time of the reading (empty = now) |
 | Register reading | button | Saves the reading and recalibrates |
@@ -144,6 +166,7 @@ data:
 | --- | --- | --- |
 | `virtual_gas_meter.register_reading` | `reading` (m³), `date` (optional), `config_entry_id` (optional) | Register a real meter reading and recalibrate |
 | `virtual_gas_meter.delete_reading` | `date` (day or exact date/time) | Delete a reading; its interval is merged into the next one |
+| `virtual_gas_meter.exclude_reading` | `date` (day or exact date/time), `exclude` (default true) | Exclude a reading's interval from the fit, or include it again (`exclude: false`), then refit |
 | `virtual_gas_meter.recalculate` | – | Refit the coefficients now |
 
 ## Energy dashboard

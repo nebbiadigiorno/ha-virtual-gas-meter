@@ -72,6 +72,9 @@
       "last_interval_error": {
         "name": "Errore ultimo intervallo"
       },
+      "last_interval_error_percent": {
+        "name": "Errore ultimo intervallo %"
+      },
       "consumption_today": {
         "name": "Consumo oggi",
         "state_attributes": {

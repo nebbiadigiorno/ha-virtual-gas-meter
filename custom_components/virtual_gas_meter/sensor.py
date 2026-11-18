@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import EntityCategory, UnitOfVolume
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfVolume
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -75,6 +75,14 @@ def _since_attrs(e: GasMeterEngine) -> dict[str, Any]:
     }
 
 
+def _error_pct(e: GasMeterEngine) -> float | None:
+    """Last interval error as % of the real consumption (None if unknown)."""
+    r = e.last_reading
+    if not r.get("m3") or r.get("error_m3") is None:
+        return None
+    return round(100 * r["error_m3"] / r["m3"], 2)
+
+
 def _error_attrs(e: GasMeterEngine) -> dict[str, Any]:
     r = e.last_reading
     attrs: dict[str, Any] = {
@@ -82,8 +90,8 @@ def _error_attrs(e: GasMeterEngine) -> dict[str, Any]:
         "estimated_m3": r.get("estimated_m3"),
         "real_m3": r.get("m3"),
     }
-    if r.get("m3") and r.get("error_m3") is not None:
-        attrs["error_percent"] = round(100 * r["error_m3"] / r["m3"], 2)
+    if (pct := _error_pct(e)) is not None:
+        attrs["error_percent"] = pct
     attrs["excluded_from_fit"] = bool(r.get("excluded"))
     if r.get("exclusion"):
         attrs["exclusion"] = r["exclusion"]
@@ -208,6 +216,15 @@ SENSORS: tuple[GasSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=3,
         value_fn=lambda e: e.last_reading.get("error_m3"),
+        attrs_fn=_error_attrs,
+    ),
+    GasSensorDescription(
+        key="last_interval_error_percent",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=1,
+        value_fn=_error_pct,
         attrs_fn=_error_attrs,
     ),
     # Daily / monthly consumption straight from the model increments.

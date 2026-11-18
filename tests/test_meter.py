@@ -54,6 +54,12 @@ async def test_seed_and_entities(hass: HomeAssistant, setup_entry) -> None:
     assert _state(hass, entry, "last_interval_error") == pytest.approx(
         0.1 * 30.0417 + 0.005 * 4000 - 24.8, abs=0.01
     )
+    # same error as % of the real 24.8 m3
+    assert _state(hass, entry, "last_interval_error_percent") == pytest.approx(
+        100 * (0.1 * 30.0417 + 0.005 * 4000 - 24.8) / 24.8, abs=0.05
+    )
+    pct = hass.states.get(eid(hass, entry, "sensor", "last_interval_error_percent"))
+    assert pct.attributes["unit_of_measurement"] == "%"
 
 
 async def test_accumulation_with_unavailable(

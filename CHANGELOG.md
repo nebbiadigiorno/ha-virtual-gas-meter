@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1
+- New diagnostic sensor *Last interval error %*: the last interval error as a percentage of the real consumption (until now only the `error_percent` attribute), with its own history and statistics.
+
 ## 0.3.0
 - Sensors that are `unavailable`/`unknown` (e.g. during a cloud outage of the thermostat vendor) are no longer counted as 0 %. Their power is estimated from a per-sensor hourly profile (one value per local hour, learnt from the sensor's own values and seeded on first start from 7 days of recorder statistics).
 - Estimated hours are reported as `estimated_hours` on the period sensors, on *Estimated consumption since last reading* (with `estimated_percent` and `estimated_index`), on *Last interval error* and in the readings history.

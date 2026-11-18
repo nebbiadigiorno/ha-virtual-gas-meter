@@ -139,6 +139,7 @@ You can change the sensors, a, k, *Refit k automatically* and *Keep a fixed* lat
 | Daily base consumption a | diagnostic sensor (m³/d) | Current a |
 | Heating coefficient k | diagnostic sensor (m³/%·h) | Current k |
 | Last interval error | diagnostic sensor (m³) | Estimate − real for the last closed interval. Attributes: `date`, `estimated_m3`, `real_m3`, `error_percent`, `excluded_from_fit`, `exclusion`, `estimated_hours`, `estimated_percent` |
+| Last interval error % | diagnostic sensor (%) | The same error as a percentage of the real consumption (`error_percent`), with its own history. Same attributes |
 | New meter reading | number (m³) | Value to register |
 | Reading date | datetime | Optional date/time of the reading (empty = now) |
 | Register reading | button | Saves the reading and recalibrates |
